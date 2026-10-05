@@ -1,8 +1,0 @@
-# never upload secrets or big files
-.env
-*.env
-data/
-__pycache__/
-*.pyc
-db.sqlite3
-producer/last_sent.txt

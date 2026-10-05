@@ -19,7 +19,9 @@ def percent(part, whole):
 
 
 def stats(request):
-    tx = Prediction.objects.all()
+    everything = Prediction.objects.all()          # the whole stream
+    district = request.GET.get("district", "")     # set when a district is clicked on the map
+    tx = everything.filter(tx_district=district) if district else everything
     flagged = tx.filter(predicted_fraud=1)
 
     # main figures and the live confusion matrix
@@ -32,14 +34,14 @@ def stats(request):
     money_at_risk = int(flagged.aggregate(s=Sum("amount_rwf"))["s"] or 0)
 
     # when did Spark save the last batch?
-    last = tx.order_by("-processed_at").values_list("processed_at", flat=True).first()
+    last = everything.order_by("-processed_at").values_list("processed_at", flat=True).first()
     seconds_ago = int((timezone.now() - last).total_seconds()) if last else None
 
     # transactions scored per minute during the last 30 minutes of activity
     per_minute = []
     if last:
         recent = (
-            tx.filter(processed_at__gte=last - timedelta(minutes=30))
+            everything.filter(processed_at__gte=last - timedelta(minutes=30))
             .annotate(minute=TruncMinute("processed_at"))
             .values("minute")
             .annotate(n=Count("transaction_id"), alerts=Sum("predicted_fraud"))
@@ -53,7 +55,7 @@ def stats(request):
     # alerts per district for the map
     districts = {
         r["tx_district"]: {"n": r["n"], "alerts": int(r["alerts"] or 0)}
-        for r in tx.values("tx_district").annotate(n=Count("transaction_id"), alerts=Sum("predicted_fraud"))
+        for r in everything.values("tx_district").annotate(n=Count("transaction_id"), alerts=Sum("predicted_fraud"))
     }
 
     # how the fraud scores are spread (10 buckets: 0-10%, 10-20%, ...)
@@ -91,6 +93,7 @@ def stats(request):
     ]
 
     return JsonResponse({
+        "selected_district": district,
         "total": total,
         "flagged": n_flagged,
         "share_flagged": percent(n_flagged, total),

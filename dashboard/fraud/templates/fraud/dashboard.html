@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile money fraud watch - Rwanda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+    :root {
+        --mist: #edf0ea;      /* page background */
+        --paper: #fbfcf9;     /* panels */
+        --hill: #1e3b2c;      /* deep green of the hills */
+        --hill-soft: #2c5039;
+        --sun: #e0a526;       /* warning / medium risk */
+        --signal: #c7362c;    /* fraud */
+        --ink: #18201b;
+        --muted: #5e6a62;
+        --line: #d5dbd3;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        background: var(--mist);
+        color: var(--ink);
+        font-family: "Barlow", "Segoe UI", sans-serif;
+        font-size: 15px;
+        line-height: 1.45;
+        font-variant-numeric: tabular-nums;
+    }
+    h1, h2, .figure-value, .amount { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; }
+    h2 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+    .note { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
+    .page { max-width: 1440px; margin: 0 auto; padding: 0 28px 40px; }
+
+    /* ---------- header and pipeline status ---------- */
+    .top {
+        display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
+        padding: 26px 0 18px; border-bottom: 2px solid var(--hill);
+    }
+    .top h1 { font-size: 34px; font-weight: 700; margin: 0; color: var(--hill); line-height: 1; }
+    .top p { margin: 6px 0 0; color: var(--muted); }
+
+    .pipeline { text-align: right; }
+    .pipeline ol {
+        list-style: none; margin: 0 0 8px; padding: 0;
+        display: flex; align-items: center; justify-content: flex-end;
+    }
+    .pipeline li { font-size: 14px; font-weight: 500; color: var(--hill); display: flex; align-items: center; }
+    .pipeline li + li::before {
+        content: ""; width: 26px; height: 2px; margin: 0 8px; background: var(--line);
+    }
+    .pipeline.live li + li::before { background: var(--hill-soft); }
+    .status { font-size: 14px; color: var(--muted); }
+    .dot {
+        display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+        background: #9aa59d; margin-right: 6px; vertical-align: 1px;
+    }
+    .pipeline.live .dot { background: #2f9e5b; animation: beat 1.6s ease-in-out infinite; }
+    .pipeline.error .dot { background: var(--signal); }
+    @keyframes beat { 50% { box-shadow: 0 0 0 5px rgba(47, 158, 91, 0.18); } }
+
+    /* ---------- headline figures ---------- */
+    .figures {
+        display: grid; grid-template-columns: repeat(5, 1fr);
+        margin: 22px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    }
+    .figure { padding: 14px 18px; }
+    .figure + .figure { border-left: 1px solid var(--line); }
+    .figure-label { color: var(--muted); font-size: 14px; }
+    .figure-value { font-size: 40px; font-weight: 600; line-height: 1.1; margin-top: 2px; }
+    .figure-value.fraud { color: var(--signal); }
+    .figure-sub { font-size: 13px; color: var(--muted); }
+
+    /* ---------- map + live feed ---------- */
+    .lead { display: grid; grid-template-columns: 7fr 5fr; gap: 20px; }
+
+    .map-panel {
+        background: var(--hill); color: #e8efe9; border-radius: 10px; padding: 22px 24px 20px;
+        position: relative; overflow: hidden;
+    }
+    /* Imigongo-style zigzag along the top edge */
+    .map-panel::before {
+        content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px;
+        background:
+            linear-gradient(135deg, var(--hill) 25%, transparent 25%) -8px 0 / 16px 16px,
+            linear-gradient(225deg, var(--hill) 25%, transparent 25%) -8px 0 / 16px 16px,
+            var(--sun);
+    }
+    .map-panel h2 { color: #fff; margin-top: 4px; }
+    .map-panel .note { color: #b7c7bb; }
+    .map-body { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 22px; align-items: start; }
+
+    .map { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(6, 64px); gap: 5px; }
+    .tile {
+        border-radius: 4px; padding: 6px 7px; background: var(--hill-soft);
+        display: flex; flex-direction: column; justify-content: space-between;
+        border: 2px solid transparent; cursor: default; transition: background 0.6s;
+    }
+    .tile:hover, .tile:focus { border-color: #fff; outline: none; }
+    .tile .name { font-size: 12.5px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tile .count { font-family: "Barlow Condensed", sans-serif; font-size: 22px; font-weight: 600; line-height: 1; }
+    .tile.hot { color: var(--ink); }
+    .tile.hot.very { color: #fff; }
+
+    .legend { font-size: 13px; color: #b7c7bb; margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+    .legend .scale { width: 150px; height: 8px; border-radius: 4px;
+        background: linear-gradient(90deg, var(--hill-soft), var(--sun), var(--signal)); }
+
+    .province-list { list-style: none; margin: 0; padding: 0; }
+    .province-list li { padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.12); }
+    .province-list .pname { font-size: 15px; font-weight: 500; color: #fff; }
+    .province-list .pstats { font-size: 13px; color: #b7c7bb; }
+    .side-title { font-size: 14px; color: #b7c7bb; margin: 0 0 4px; }
+
+    .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 18px 20px; }
+
+    .feed { list-style: none; margin: 0; padding: 0; max-height: 470px; overflow-y: auto; }
+    .feed li {
+        display: grid; grid-template-columns: 1fr auto; gap: 2px 12px;
+        padding: 10px 4px; border-bottom: 1px solid var(--line);
+    }
+    .feed li.new { animation: arrive 2.5s ease-out; }
+    @keyframes arrive { from { background: rgba(224, 165, 38, 0.35); } to { background: transparent; } }
+    .feed .amount { font-size: 21px; font-weight: 600; }
+    .feed .what { color: var(--muted); font-size: 13.5px; }
+    .feed .risk { text-align: right; font-weight: 600; color: var(--signal); font-size: 15px; }
+    .feed .truth { font-size: 13px; text-align: right; }
+    .truth.yes { color: var(--signal); }
+    .truth.no { color: var(--muted); }
+    .empty { color: var(--muted); padding: 20px 0; }
+
+    /* ---------- lower sections ---------- */
+    .row { display: grid; gap: 20px; margin-top: 20px; }
+    .row.two { grid-template-columns: 8fr 4fr; }
+    .row.three { grid-template-columns: 1fr 1fr 1fr; }
+    .chart-box { position: relative; height: 240px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: left; font-weight: 500; color: var(--muted); padding: 6px 6px 8px; border-bottom: 1px solid var(--line); }
+    td { padding: 8px 6px; border-bottom: 1px solid #e6eae4; }
+    td.num, th.num { text-align: right; }
+    .bar-cell { width: 38%; }
+    .bar { height: 8px; border-radius: 4px; background: #e3e8e1; overflow: hidden; }
+    .bar span { display: block; height: 100%; background: var(--hill-soft); }
+    .bar.low span { background: var(--signal); }
+
+    .matrix { display: grid; grid-template-columns: 110px 1fr 1fr; gap: 4px; font-size: 14px; }
+    .matrix div { padding: 10px; }
+    .matrix .head { color: var(--muted); font-size: 13px; padding: 4px 10px; }
+    .matrix .cell { border-radius: 4px; font-family: "Barlow Condensed", sans-serif; font-size: 26px; font-weight: 600; }
+    .matrix .cell small { display: block; font-family: "Barlow", sans-serif; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+    .good { background: #dfeee3; }
+    .bad { background: #f6e0dc; }
+
+    .features { list-style: none; margin: 0; padding: 0; }
+    .features li { display: grid; grid-template-columns: 175px 1fr 48px; gap: 10px; align-items: center; padding: 5px 0; font-size: 14px; }
+    .features .bar span { background: var(--sun); }
+
+    footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 1100px) {
+        .figures { grid-template-columns: repeat(2, 1fr); }
+        .figure + .figure { border-left: none; }
+        .lead, .row.two, .row.three { grid-template-columns: 1fr; }
+        .top { flex-direction: column; align-items: flex-start; }
+        .pipeline { text-align: left; }
+        .pipeline ol { justify-content: flex-start; flex-wrap: wrap; }
+    }
+    @media (max-width: 640px) {
+        .page { padding: 0 14px 30px; }
+        .map-panel { padding: 20px 14px 16px; }
+        .map-body { grid-template-columns: minmax(0, 1fr); }
+        .map { grid-template-rows: repeat(6, 54px); }
+        .tile .name { font-size: 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .pipeline.live .dot, .feed li.new { animation: none; }
+        .tile { transition: none; }
+    }
+</style>
+</head>
+<body>
+<div class="page">
+
+    <header class="top">
+        <div>
+            <h1>Mobile money fraud watch</h1>
+            <p>Live fraud scoring of MTN MoMo and Airtel Money transactions across Rwanda</p>
+        </div>
+        <div class="pipeline" id="pipeline">
+            <ol aria-label="Data pipeline">
+                <li>HDFS</li><li>Kafka</li><li>Spark MLlib</li><li>AWS RDS</li><li>Django</li>
+            </ol>
+            <div class="status"><span class="dot"></span><span id="status-text">Connecting to the database</span></div>
+        </div>
+    </header>
+
+    <section class="figures" aria-label="Summary">
+        <div class="figure">
+            <div class="figure-label">Transactions scored</div>
+            <div class="figure-value" id="f-total">0</div>
+            <div class="figure-sub">since the stream started</div>
+        </div>
+        <div class="figure">
+            <div class="figure-label">Flagged as fraud</div>
+            <div class="figure-value fraud" id="f-flagged">0</div>
+            <div class="figure-sub" id="f-share">0% of all transactions</div>
+        </div>
+        <div class="figure">
+            <div class="figure-label">Money in flagged transactions</div>
+            <div class="figure-value" id="f-money">0</div>
+            <div class="figure-sub">Rwandan francs</div>
+        </div>
+        <div class="figure">
+            <div class="figure-label">Alerts that were real fraud</div>
+            <div class="figure-value" id="f-precision">0%</div>
+            <div class="figure-sub">precision on live data</div>
+        </div>
+        <div class="figure">
+            <div class="figure-label">Real frauds caught</div>
+            <div class="figure-value" id="f-recall">0%</div>
+            <div class="figure-sub">recall on live data</div>
+        </div>
+    </section>
+
+    <section class="lead">
+        <div class="map-panel">
+            <h2>Where the alerts are</h2>
+            <p class="note">Fraud alerts by district, placed roughly where each district lies. Hover a district for details.</p>
+            <div class="map-body">
+                <div>
+                    <div class="map" id="map"></div>
+                    <div class="legend">No alerts <span class="scale"></span> Most alerts</div>
+                </div>
+                <div>
+                    <p class="side-title">By province</p>
+                    <ul class="province-list" id="provinces"></ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Latest fraud alerts</h2>
+            <p class="note">Newest first. The right column shows what the transaction really was.</p>
+            <ul class="feed" id="feed"><li class="empty">Waiting for data</li></ul>
+        </div>
+    </section>
+
+    <section class="row two">
+        <div class="panel">
+            <h2>Stream activity</h2>
+            <p class="note">Transactions scored by Spark each minute, with the alerts raised, over the last 30 minutes of activity.</p>
+            <div class="chart-box"><canvas id="minuteChart"></canvas></div>
+        </div>
+        <div class="panel">
+            <h2>Fraud scores</h2>
+            <p class="note">How confident the model is. Most transactions score close to zero.</p>
+            <div class="chart-box"><canvas id="riskChart"></canvas></div>
+        </div>
+    </section>
+
+    <section class="row three">
+        <div class="panel">
+            <h2>Alerts by hour of day</h2>
+            <p class="note">Night hours (23:00 to 04:00) carry most account-draining fraud.</p>
+            <div class="chart-box"><canvas id="hourChart"></canvas></div>
+        </div>
+        <div class="panel">
+            <h2>Alerts by transaction type</h2>
+            <p class="note">Money leaving an account is where fraud happens.</p>
+            <div class="chart-box"><canvas id="typeChart"></canvas></div>
+        </div>
+        <div class="panel">
+            <h2>Frauds caught by pattern</h2>
+            <p class="note">Share of each real fraud pattern the model flagged.</p>
+            <table>
+                <thead><tr><th>Pattern</th><th class="num">Caught</th><th class="bar-cell"></th></tr></thead>
+                <tbody id="patterns"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="row three">
+        <div class="panel">
+            <h2>Live results against the truth</h2>
+            <p class="note">Every scored transaction compared with its real label.</p>
+            <div class="matrix" id="matrix"></div>
+        </div>
+        <div class="panel">
+            <h2>Model comparison</h2>
+            <p class="note">Trained on 2024 to 2025, tested on January to May 2026.</p>
+            <table>
+                <thead><tr><th>Model</th><th class="num">AUC</th><th class="num">Precision</th><th class="num">Recall</th><th class="num">F1</th></tr></thead>
+                <tbody id="models"></tbody>
+            </table>
+        </div>
+        <div class="panel">
+            <h2>What the model looks at</h2>
+            <p class="note">Feature importance in the Random Forest.</p>
+            <ul class="features" id="features"></ul>
+        </div>
+    </section>
+
+    <footer>
+        Big Data Essentials project. Data is synthetic and generated for this study. Times are shown in UTC.
+    </footer>
+</div>
+
+<script>
+// Rwanda's 30 districts: name, province, column, row (a rough map layout)
+const DISTRICTS = [
+    ["Rubavu", "Western", 1, 1], ["Nyabihu", "Western", 2, 1], ["Musanze", "Northern", 3, 1],
+    ["Burera", "Northern", 4, 1], ["Gicumbi", "Northern", 5, 1], ["Nyagatare", "Eastern", 6, 1],
+    ["Rutsiro", "Western", 1, 2], ["Ngororero", "Western", 2, 2], ["Gakenke", "Northern", 3, 2],
+    ["Rulindo", "Northern", 4, 2], ["Gasabo", "Kigali", 5, 2], ["Gatsibo", "Eastern", 6, 2],
+    ["Karongi", "Western", 1, 3], ["Muhanga", "Southern", 2, 3], ["Kamonyi", "Southern", 3, 3],
+    ["Nyarugenge", "Kigali", 4, 3], ["Rwamagana", "Eastern", 5, 3], ["Kayonza", "Eastern", 6, 3],
+    ["Nyamasheke", "Western", 1, 4], ["Ruhango", "Southern", 2, 4], ["Nyanza", "Southern", 3, 4],
+    ["Kicukiro", "Kigali", 4, 4], ["Bugesera", "Eastern", 5, 4], ["Ngoma", "Eastern", 6, 4],
+    ["Rusizi", "Western", 1, 5], ["Nyamagabe", "Southern", 2, 5], ["Huye", "Southern", 3, 5],
+    ["Gisagara", "Southern", 4, 5], ["Kirehe", "Eastern", 6, 5],
+    ["Nyaruguru", "Southern", 3, 6],
+];
+
+const TYPE_NAMES = {
+    CASH_IN: "Cash in", CASH_OUT: "Cash out", P2P_TRANSFER: "Transfer to person",
+    MERCHANT_PAYMENT: "Merchant payment", AIRTIME: "Airtime", BILL_PAYMENT: "Bill payment",
+    BANK_TRANSFER: "Transfer to bank",
+};
+
+const FEATURE_NAMES = {
+    account_emptied: "Account nearly emptied", sim_swap_new_device: "SIM swap on a new phone",
+    sim_swap_7d: "SIM swapped in last 7 days", amount_vs_7d_avg: "Amount vs usual spending",
+    amount_to_balance: "Amount vs balance", is_night: "Night-time transaction",
+    tx_count_1h: "Transactions in last hour", is_money_out: "Money leaving the account",
+    hour_of_day: "Hour of day", is_new_device: "Unfamiliar phone", is_new_account: "New account",
+    amount_rwf: "Amount", balance_before: "Balance before", avg_amount_7d: "Usual amount (7 days)",
+    account_age_days: "Account age", customer_age: "Customer age", is_home_district: "In home district",
+    is_weekend: "Weekend",
+};
+
+const fmt = n => Number(n).toLocaleString("en-US");
+const PATTERN_NAMES = {
+    sim_swap_takeover: "SIM swap takeover", night_account_drain: "Account drained at night",
+    agent_collusion: "Agent collusion", new_account_large_tx: "Large payment from new account",
+    rapid_p2p_transfers: "Burst of P2P transfers", amount_spike: "Unusual amount spike",
+    other: "Other fraud",
+};
+const nicePattern = s => PATTERN_NAMES[s] || s.replaceAll("_", " ");
+const seen = new Set();
+let firstLoad = true;
+
+// ---------- draw the empty map once ----------
+const mapEl = document.getElementById("map");
+for (const [name, province, col, row] of DISTRICTS) {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.id = "d-" + name;
+    tile.tabIndex = 0;
+    tile.style.gridColumn = col;
+    tile.style.gridRow = row;
+    tile.innerHTML = `<span class="name">${name}</span><span class="count">0</span>`;
+    mapEl.appendChild(tile);
+}
+
+// mix two colours: t = 0 gives a, t = 1 gives b
+function mix(a, b, t) {
+    const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const [x, y] = [p(a), p(b)];
+    return "rgb(" + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(",") + ")";
+}
+function heat(t) {
+    if (t <= 0) return "#2c5039";
+    return t < 0.5 ? mix("#2c5039", "#e0a526", t * 2) : mix("#e0a526", "#c7362c", (t - 0.5) * 2);
+}
+
+// ---------- charts ----------
+Chart.defaults.font.family = "Barlow, 'Segoe UI', sans-serif";
+Chart.defaults.font.size = 13;
+Chart.defaults.color = "#5e6a62";
+Chart.defaults.borderColor = "#e3e8e1";
+Chart.defaults.animation = false;
+Chart.defaults.maintainAspectRatio = false;
+Chart.defaults.plugins.legend.display = false;
+
+const minuteChart = new Chart(document.getElementById("minuteChart"), {
+    data: {
+        labels: [],
+        datasets: [
+            { type: "bar", label: "Transactions scored", data: [], backgroundColor: "#b9cbbd", yAxisID: "y" },
+            { type: "line", label: "Fraud alerts", data: [], borderColor: "#c7362c", backgroundColor: "#c7362c",
+              pointRadius: 2, tension: 0.3, yAxisID: "y2" },
+        ],
+    },
+    options: {
+        plugins: { legend: { display: true, position: "top", align: "end", labels: { boxWidth: 12 } } },
+        scales: {
+            y: { beginAtZero: true, title: { display: true, text: "transactions" } },
+            y2: { beginAtZero: true, position: "right", grid: { display: false }, title: { display: true, text: "alerts" } },
+            x: { grid: { display: false } },
+        },
+    },
+});
+
+const riskChart = new Chart(document.getElementById("riskChart"), {
+    type: "bar",
+    data: {
+        labels: ["0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80", "80-90", "90-100"],
+        datasets: [{ data: [], backgroundColor: ["#2c5039", "#2c5039", "#2c5039", "#2c5039", "#2c5039",
+                                                 "#e0a526", "#e0a526", "#c7362c", "#c7362c", "#c7362c"] }],
+    },
+    options: {
+        scales: {
+            y: { type: "logarithmic", title: { display: true, text: "transactions (log scale)" } },
+            x: { grid: { display: false }, title: { display: true, text: "fraud probability (%)" } },
+        },
+    },
+});
+
+const hourChart = new Chart(document.getElementById("hourChart"), {
+    type: "bar",
+    data: {
+        labels: [...Array(24).keys()].map(h => String(h).padStart(2, "0")),
+        datasets: [{ data: [], backgroundColor: [...Array(24).keys()].map(h => (h >= 23 || h <= 4) ? "#1e3b2c" : "#b9cbbd") }],
+    },
+    options: { scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } },
+});
+
+const typeChart = new Chart(document.getElementById("typeChart"), {
+    type: "bar",
+    data: { labels: [], datasets: [{ data: [], backgroundColor: "#c7362c" }] },
+    options: { indexAxis: "y", scales: { x: { beginAtZero: true }, y: { grid: { display: false } } } },
+});
+
+// ---------- fill the page with new data ----------
+function render(d) {
+    // pipeline status
+    const pipe = document.getElementById("pipeline");
+    const status = document.getElementById("status-text");
+    pipe.classList.remove("error");
+    if (d.seconds_ago === null) {
+        pipe.classList.remove("live");
+        status.textContent = "No transactions yet. Start the producer and the streaming job.";
+    } else if (d.seconds_ago < 30) {
+        pipe.classList.add("live");
+        status.textContent = `Live. Last batch saved ${d.seconds_ago} s ago`;
+    } else {
+        pipe.classList.remove("live");
+        const mins = Math.round(d.seconds_ago / 60);
+        status.textContent = `Stream paused. Last batch saved ${mins < 1 ? d.seconds_ago + " s" : mins + " min"} ago`;
+    }
+
+    // headline figures
+    document.getElementById("f-total").textContent = fmt(d.total);
+    document.getElementById("f-flagged").textContent = fmt(d.flagged);
+    document.getElementById("f-share").textContent = `${d.share_flagged}% of all transactions`;
+    document.getElementById("f-money").textContent = fmt(d.money_at_risk);
+    document.getElementById("f-precision").textContent = d.precision + "%";
+    document.getElementById("f-recall").textContent = d.recall + "%";
+
+    // map
+    const maxAlerts = Math.max(1, ...Object.values(d.districts).map(x => x.alerts));
+    const provinces = {};
+    for (const [name, province] of DISTRICTS) {
+        const info = d.districts[name] || { n: 0, alerts: 0 };
+        const t = info.alerts / maxAlerts;
+        const tile = document.getElementById("d-" + name);
+        tile.style.background = heat(t);
+        tile.classList.toggle("hot", t > 0.25);
+        tile.classList.toggle("very", t > 0.75);
+        tile.querySelector(".count").textContent = info.alerts;
+        tile.title = `${name} (${province} Province): ${fmt(info.alerts)} alerts in ${fmt(info.n)} transactions`;
+
+        provinces[province] = provinces[province] || { n: 0, alerts: 0 };
+        provinces[province].n += info.n;
+        provinces[province].alerts += info.alerts;
+    }
+    document.getElementById("provinces").innerHTML = Object.entries(provinces)
+        .sort((a, b) => b[1].alerts - a[1].alerts)
+        .map(([p, v]) => `<li><div class="pname">${p}</div>
+             <div class="pstats">${fmt(v.alerts)} alerts, ${v.n ? (v.alerts / v.n * 100).toFixed(1) : 0}% of transactions</div></li>`)
+        .join("");
+
+    // live feed
+    const feed = document.getElementById("feed");
+    if (d.feed.length === 0) {
+        feed.innerHTML = '<li class="empty">No alerts yet. Alerts appear here as soon as Spark flags a transaction.</li>';
+    } else {
+        feed.innerHTML = d.feed.map(a => {
+            const isNew = !firstLoad && !seen.has(a.id);
+            seen.add(a.id);
+            const truth = a.actual
+                ? `<span class="truth yes">Real fraud: ${nicePattern(a.fraud_type).toLowerCase()}</span>`
+                : `<span class="truth no">False alarm</span>`;
+            return `<li class="${isNew ? "new" : ""}">
+                <div><span class="amount">${fmt(a.amount)} RWF</span></div>
+                <div class="risk">${a.probability}% risk</div>
+                <div class="what">${TYPE_NAMES[a.type] || a.type} in ${a.district}, ${a.account}, ${a.time}</div>
+                <div class="truth">${truth}</div>
+            </li>`;
+        }).join("");
+        firstLoad = false;
+    }
+
+    // charts
+    minuteChart.data.labels = d.per_minute.map(m => m.minute);
+    minuteChart.data.datasets[0].data = d.per_minute.map(m => m.n);
+    minuteChart.data.datasets[1].data = d.per_minute.map(m => m.alerts);
+    minuteChart.update("none");
+
+    riskChart.data.datasets[0].data = d.risk_buckets;
+    riskChart.update("none");
+
+    hourChart.data.datasets[0].data = d.by_hour;
+    hourChart.update("none");
+
+    typeChart.data.labels = d.by_type.map(t => TYPE_NAMES[t.transaction_type] || t.transaction_type);
+    typeChart.data.datasets[0].data = d.by_type.map(t => t.n);
+    typeChart.update("none");
+
+    // patterns
+    document.getElementById("patterns").innerHTML = d.patterns.map(p => `
+        <tr><td>${nicePattern(p.name)}</td>
+            <td class="num">${p.caught} of ${p.total}</td>
+            <td class="bar-cell"><div class="bar ${p.rate < 30 ? "low" : ""}"><span style="width:${p.rate}%"></span></div></td></tr>`
+    ).join("");
+
+    // confusion matrix
+    const c = d.confusion;
+    document.getElementById("matrix").innerHTML = `
+        <div class="head"></div><div class="head">Real fraud</div><div class="head">Legitimate</div>
+        <div class="head">Flagged</div>
+        <div class="cell good">${fmt(c.tp)}<small>frauds caught</small></div>
+        <div class="cell bad">${fmt(c.fp)}<small>false alarms</small></div>
+        <div class="head">Not flagged</div>
+        <div class="cell bad">${fmt(c.fn)}<small>frauds missed</small></div>
+        <div class="cell good">${fmt(c.tn)}<small>correctly passed</small></div>`;
+
+    // models and features
+    document.getElementById("models").innerHTML = d.models.map(m => `
+        <tr><td>${m.model_name}${m.is_best ? " (in use)" : ""}</td>
+            <td class="num">${m.auc_roc.toFixed(3)}</td><td class="num">${m.precision_score.toFixed(3)}</td>
+            <td class="num">${m.recall_score.toFixed(3)}</td><td class="num">${m.f1_score.toFixed(3)}</td></tr>`
+    ).join("");
+
+    const topScore = Math.max(...d.features.map(f => f.importance), 0.0001);
+    document.getElementById("features").innerHTML = d.features.map(f => `
+        <li><span>${FEATURE_NAMES[f.feature] || f.feature}</span>
+            <div class="bar"><span style="width:${f.importance / topScore * 100}%"></span></div>
+            <span class="num">${(f.importance * 100).toFixed(1)}%</span></li>`
+    ).join("");
+}
+
+async function refresh() {
+    try {
+        const response = await fetch("/api/stats/");
+        if (!response.ok) throw new Error(response.status);
+        render(await response.json());
+    } catch (err) {
+        const pipe = document.getElementById("pipeline");
+        pipe.classList.remove("live");
+        pipe.classList.add("error");
+        document.getElementById("status-text").textContent =
+            "Can't reach the database. Check that Django is running and your IP is allowed in the RDS security group.";
+    }
+}
+
+refresh();
+setInterval(refresh, 5000);   // update every 5 seconds
+</script>
+</body>
+</html>

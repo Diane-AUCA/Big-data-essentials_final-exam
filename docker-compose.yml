@@ -1,0 +1,78 @@
+# Mobile Money Fraud Detection - Big Data environment
+# Services: HDFS (namenode + datanode), Kafka (KRaft, no Zookeeper), Spark (PySpark 3.5.1)
+# Sized for an 8 GB laptop. The database is on AWS RDS, so there is no MySQL container.
+#
+# Start:  docker compose up -d --build
+# Stop:   docker compose stop        (keeps your HDFS data)
+# NOTE:   "docker compose down" deletes the containers AND the data inside HDFS.
+
+services:
+
+  namenode:
+    image: apache/hadoop:3.3.6
+    container_name: namenode
+    hostname: namenode
+    command: ["hdfs", "namenode"]
+    ports:
+      - "9870:9870"        # HDFS web UI -> http://localhost:9870
+    env_file:
+      - ./docker/hadoop.env
+    environment:
+      ENSURE_NAMENODE_DIR: "/tmp/hadoop-root/dfs/name"
+      HDFS_NAMENODE_OPTS: "-Xmx512m"
+    volumes:
+      - ./data:/data       # your CSV is visible inside the container at /data
+
+  datanode:
+    image: apache/hadoop:3.3.6
+    container_name: datanode
+    hostname: datanode
+    command: ["hdfs", "datanode"]
+    env_file:
+      - ./docker/hadoop.env
+    environment:
+      HDFS_DATANODE_OPTS: "-Xmx512m"
+    depends_on:
+      - namenode
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"        # for tools running on Windows (optional)
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+
+  spark:
+    build: ./docker/spark
+    container_name: spark
+    hostname: spark
+    env_file:
+      - .env
+    command: ["sleep", "infinity"]   # stays running; we run jobs with "docker exec"
+    ports:
+      - "4040:4040"        # Spark job UI (while a job is running) -> http://localhost:4040
+    mem_limit: 2500m
+    volumes:
+      - .:/app             # your whole project folder is at /app inside the container
+      - ivy-cache:/root/.ivy2   # caches downloaded Spark packages (Kafka, MySQL JDBC)
+    depends_on:
+      - namenode
+      - kafka
+
+volumes:
+  ivy-cache:

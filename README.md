@@ -88,14 +88,14 @@ Python libraries for the dashboard: see `dashboard/requirements.txt` (installed 
 
 Run the commands from the project folder.
 
-1. **Database settings.** Copy `.env.example` to `.env` and fill in the RDS endpoint, user and password. Never share or upload the `.env` file.
+1. **Database settings.** 
 
-2. **Create the data** (about 3 minutes, needs only standard Python):
+2. **Create the data** 
    ```
    python generate_dataset.py
    ```
 
-3. **Start the containers** (the first time takes 5 to 15 minutes):
+3. **Start the containers** :
    ```
    docker compose up -d --build
    docker compose ps
@@ -107,14 +107,14 @@ Run the commands from the project folder.
    docker exec namenode hdfs dfs -put /data/mobile_money_transactions.csv /momo/raw/
    docker exec namenode hdfs fsck /momo
    ```
-   The last line must say HEALTHY. The HDFS web page is at http://localhost:9870.
+    The HDFS web page is at http://localhost:9870.
 
 5. **Create the Kafka topic:**
    ```
    docker exec kafka /opt/kafka/bin/kafka-topics.sh --create --topic momo-transactions --bootstrap-server kafka:29092 --partitions 3 --replication-factor 1
    ```
 
-6. **Train the model** (about 7 minutes). It saves the model to HDFS and the scores to `spark/model_metrics.json`:
+6. **Train the model** . It saves the model to HDFS and the scores to `spark/model_metrics.json`:
    ```
    docker exec spark python /app/spark/train_model.py
    ```
@@ -124,7 +124,7 @@ Run the commands from the project folder.
    docker exec spark python /app/spark/setup_database.py
    ```
 
-8. **Start the streaming job** (leave this terminal open):
+8. **Start the streaming job** :
    ```
    docker exec -it spark python /app/spark/streaming.py
    ```
@@ -135,7 +135,7 @@ Run the commands from the project folder.
    ```
    Every 5 seconds the streaming terminal prints a line such as `batch 81: 100 saved to RDS, 2 flagged as fraud`.
 
-10. **Open the dashboard** at http://13.51.200.99 or run it on your own computer (see below).
+10. **Open the dashboard** at http://13.51.200.99 or run it on your own computer .
 
 To stop: press Ctrl+C in the producer terminal, then in the streaming terminal, then run `docker compose stop`. Use `stop` and not `down`, because `down` deletes the data stored in HDFS.
 

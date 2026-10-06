@@ -17,7 +17,7 @@ Big Data Essentials course project. Lecturer: Dr. Kundan Kumar. October 2026.
 
 - Dashboard (hosted on AWS EC2): http://13.51.200.99
 - Dashboard code: https://github.com/Diane-AUCA/Big-data-essentials_final-exam
-- Demo video: ADD LINK HERE
+
 
 The dashboard shows "Live" only while the pipeline is running. Otherwise it shows "Stream paused" and the data already stored in the database.
 

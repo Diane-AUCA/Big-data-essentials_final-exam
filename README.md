@@ -1,6 +1,6 @@
 # Real-Time Mobile Money Fraud Detection for Rwanda
 
-Big Data Essentials course project. Lecturer: Dr. Kundan Kumar. October 2026.
+Big Data Essentials final exam.
 
 ## Group members
 

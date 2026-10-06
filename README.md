@@ -11,7 +11,7 @@ Big Data Essentials final exam.
 | 3 | TUMUKUNDE Sandra | 101483 |
 | 4 | TWAGIRAYEZU Emmanuel | 101214 |
 | 5 | EMERIMANA Edwin Kennedy | 101205 |
-| 6 | MANIRAGUHA Jean de Dieu | 10118 |
+| 6 | MANIRAGUHA Jean de Dieu | 101189 |
 
 ## Links
 
